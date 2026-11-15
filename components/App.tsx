@@ -6,6 +6,7 @@ import Library from "./Library";
 import SourcesView from "./SourcesView";
 import NotesView, { QuickCapture } from "./NotesView";
 import { colorFor, Icon } from "./ui";
+import Onboarding, { hasSeenOnboarding } from "./Onboarding";
 
 export type Status = { cala: boolean; exa?: boolean; claude: boolean; model: string } | null;
 
@@ -25,6 +26,10 @@ export default function App() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [capture, setCapture] = useState(false);
+  const [guide, setGuide] = useState(false);
+  useEffect(() => {
+    if (!hasSeenOnboarding()) setGuide(true);
+  }, []);
   const [noteFilter, setNoteFilter] = useState<string | null>(null);
   const [info, setInfo] = useState<ResearchInfo>({ stage: "ask", name: null, tab: "desk", running: false, hasBrief: false, queries: 0 });
   const [nav, setNav] = useState<{ tab?: "desk" | "brief"; home?: number }>({});
@@ -118,6 +123,9 @@ export default function App() {
           <button className={`sb-item ${view === "sources" ? "on" : ""}`} onClick={() => setView("sources")}>
             <Icon name="globe" size={16} /> Sources
           </button>
+          <button className="sb-item" onClick={() => setGuide(true)}>
+            <Icon name="help" size={16} /> How it works
+          </button>
         </div>
 
         <div className="sb-group">
@@ -175,6 +183,7 @@ export default function App() {
         <span style={{ width: 14, height: 14, borderRadius: 3, background: "#fff6cf", boxShadow: "0 2px 0 var(--sun-edge)" }} /> Note
       </button>
       {capture && <QuickCapture api={notesApi} onClose={() => setCapture(false)} />}
+      {guide && <Onboarding onClose={() => setGuide(false)} />}
     </div>
   );
 }
