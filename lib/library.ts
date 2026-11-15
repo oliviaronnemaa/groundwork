@@ -3,7 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import type { LibraryRecord } from "./types";
 
-const FILE = path.join(process.cwd(), "data", "library.json");
+const FILE = path.join(process.env.VERCEL ? "/tmp" : path.join(process.cwd(), "data"), "library.json");
 
 export async function readLibrary(): Promise<LibraryRecord[]> {
   try {

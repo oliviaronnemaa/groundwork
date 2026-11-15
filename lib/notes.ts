@@ -3,7 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import type { Note } from "./types";
 
-const FILE = path.join(process.cwd(), "data", "notes.json");
+const FILE = path.join(process.env.VERCEL ? "/tmp" : path.join(process.cwd(), "data"), "notes.json");
 let queue: Promise<unknown> = Promise.resolve();
 
 export async function readNotes(): Promise<Note[]> {

@@ -7,3 +7,4 @@ next-env.d.ts
 data/notes.json
 data/cala-cache.json
 data/exa-cache.json
+.vercel

@@ -26,7 +26,7 @@ export type ExaSearch = {
   contents?: { highlights?: { query?: string; maxCharacters?: number }; text?: { maxCharacters?: number } };
 };
 
-const CACHE_FILE = path.join(process.cwd(), "data", "exa-cache.json");
+const CACHE_FILE = path.join(process.env.VERCEL ? "/tmp" : path.join(process.cwd(), "data"), "exa-cache.json");
 const TTL = 3 * 24 * 3600 * 1000;
 let cache: Record<string, { at: number; data: unknown }> | null = null;
 let cacheWrite: Promise<void> = Promise.resolve();
