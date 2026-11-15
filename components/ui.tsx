@@ -67,12 +67,16 @@ export function SaveModal({
   library,
   onCancel,
   onConfirm,
+  extras = [],
 }: {
   record: LibraryRecord;
   library: LibraryRecord[];
   onCancel: () => void;
-  onConfirm: (r: LibraryRecord) => void;
+  onConfirm: (r: LibraryRecord, extras: LibraryRecord[]) => void;
+  extras?: LibraryRecord[];
 }) {
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(extras.map((x) => x.id)));
+  const togglePick = (id: string) => setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const existing = library.find((r) => r.id === record.id);
   const similar = useMemo(
     () => library.filter((r) => r.id !== record.id && r.type === record.type && (norm(r.name) === norm(record.name) || (norm(r.name).length > 3 && norm(record.name).includes(norm(r.name))))),
@@ -106,11 +110,32 @@ export function SaveModal({
             </tbody>
           </table>
         )}
+        {extras.length > 0 && (
+          <div className="save-extras">
+            <b className="nu">Also save their profiles</b>
+            <span className="small muted">Each becomes its own record in your library, with every sourced field. Records you already have are updated and keep your own fields and notes.</span>
+            <div className="save-list">
+              {extras.map((x) => {
+                const had = library.some((r) => r.id === x.id);
+                return (
+                  <label key={x.id} className="save-item">
+                    <input type="checkbox" checked={picked.has(x.id)} onChange={() => togglePick(x.id)} />
+                    <span className="tile" style={{ width: 24, height: 24, borderRadius: 7, fontSize: 12, background: colorFor(x.name) }}>{x.name.charAt(0).toUpperCase()}</span>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ fontWeight: 600 }}>{x.name}</span>
+                      <span className="small muted"> · {x.type}{x.fields.length ? ` · ${x.fields.length} fields` : ""}{had ? " · update" : ""}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <label className="label" htmlFor="save-notes">Your notes (optional)</label>
         <textarea id="save-notes" className="field" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What you think, what to follow up on…" />
         <div className="row" style={{ justifyContent: "flex-end", marginTop: 14 }}>
           <button className="btn ghost" onClick={onCancel}>Cancel</button>
-          <button className="btn primary" onClick={() => onConfirm({ ...record, notes, fields: existing ? mergeFields(existing.fields, fields) : fields })}>
+          <button className="btn primary" onClick={() => onConfirm({ ...record, notes, fields: existing ? mergeFields(existing.fields, fields) : fields }, extras.filter((x) => picked.has(x.id)))}>
             {existing ? "Update record" : "Save record"}
           </button>
         </div>
@@ -119,7 +144,7 @@ export function SaveModal({
   );
 }
 
-function mergeFields(old: LibraryField[], fresh: LibraryField[]) {
+export function mergeFields(old: LibraryField[], fresh: LibraryField[]) {
   // Keep the investor's own fields; refresh the sourced ones.
   return [...fresh, ...old.filter((f) => f.provenance !== "cala")];
 }

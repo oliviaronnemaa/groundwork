@@ -29,6 +29,19 @@ export async function upsertRecord(rec: LibraryRecord) {
   return list;
 }
 
+/** Save several records in one write, so a research save and its profiles can't race each other. */
+export async function upsertMany(recs: LibraryRecord[]) {
+  const list = await readLibrary();
+  const now = new Date().toISOString();
+  for (const rec of recs) {
+    const i = list.findIndex((r) => r.id === rec.id);
+    if (i >= 0) list[i] = { ...list[i], ...rec, savedAt: list[i].savedAt, updatedAt: now };
+    else list.unshift({ ...rec, savedAt: now, updatedAt: now });
+  }
+  await write(list);
+  return list;
+}
+
 export async function deleteRecord(id: string) {
   const list = (await readLibrary()).filter((r) => r.id !== id);
   await write(list);

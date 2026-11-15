@@ -7,7 +7,7 @@ import GraphMap from "./GraphMap";
 import BriefView from "./BriefView";
 import Desk, { titleCase, type DeskRun } from "./Desk";
 import Inspector, { type Selection } from "./Inspector";
-import { colorFor, Icon, SaveModal, Spinner } from "./ui";
+import { colorFor, Icon, mergeFields, SaveModal, Spinner } from "./ui";
 
 const SUGGESTIONS = [
   { t: "Prep a founder meeting", icon: "calendar", bg: "var(--blue-soft)", ink: "var(--blue)", q: "I'm meeting the founders of Aiven next week. Help me understand the team, who has backed them, and who I should talk to before the meeting." },
@@ -67,7 +67,7 @@ export default function Research({
 }: {
   status: Status;
   library: LibraryRecord[];
-  onSave: (r: LibraryRecord) => Promise<boolean>;
+  onSave: (r: LibraryRecord | LibraryRecord[]) => Promise<boolean>;
   notesApi: NotesApi;
   onOpenNotes: (linkId: string) => void;
   onInfo: (i: ResearchInfo) => void;
@@ -93,6 +93,7 @@ export default function Research({
   const [tab, setTab] = useState<"desk" | "network" | "brief">("desk");
   const [sel, setSel] = useState<Selection>(null);
   const [saving, setSaving] = useState<LibraryRecord | null>(null);
+  const [savingExtras, setSavingExtras] = useState<LibraryRecord[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -261,15 +262,41 @@ export default function Research({
   }, [brief]);
 
   // ---------- save ----------
-  function saveNode(id: string) {
+  function profileFor(id: string): LibraryRecord | null {
     const node = run.nodes.find((n) => n.id === id);
-    if (!node) return;
+    if (!node) return null;
     const type = node.kind === "person" ? "person" : node.kind === "investor" ? (node.entityType === "Person" ? "person" : "investor") : "company";
-    const fields = run.evidence.filter((e) => e.entityId === id).map((e) => ({ label: e.label, value: e.value, provenance: "cala" as const, sources: e.sources }));
-    setSaving({ id, type, name: node.name, fields, notes: "", savedAt: "", updatedAt: "" });
+    const fields = run.evidence
+      .filter((e) => e.entityId === id)
+      .map((e) => ({ label: e.label, value: e.value, provenance: (e.sources.some((s) => s.name?.startsWith("Your input")) ? "note" : "cala") as "cala" | "note", sources: e.sources }));
+    return { id, type, name: node.name, fields, notes: "", savedAt: "", updatedAt: "", notesList: notesApi.notes.filter((n) => n.links.some((l) => l.id === id)) };
+  }
+  function saveNode(id: string) {
+    const rec = profileFor(id);
+    if (!rec) return;
+    setSavingExtras([]);
+    setSaving(rec);
+  }
+  /** The company plus everyone directly linked to it: founders, team and investors. */
+  function linkedProfiles(): LibraryRecord[] {
+    if (!company) return [];
+    const touches = (id: string) => run.edges.some((e) => (e.from === id && e.to === company.id) || (e.to === id && e.from === company.id));
+    const ids = [
+      company.id,
+      ...run.nodes.filter((n) => n.kind === "person" && touches(n.id)).map((n) => n.id),
+      ...run.nodes.filter((n) => n.kind === "investor").map((n) => n.id),
+    ];
+    return [...new Set(ids)]
+      .map(profileFor)
+      .filter((r): r is LibraryRecord => !!r)
+      .map((r) => {
+        const old = library.find((x) => x.id === r.id);
+        return old ? { ...r, notes: old.notes, fields: mergeFields(old.fields, r.fields) } : r;
+      });
   }
   function saveResearch() {
     if (!company) return;
+    setSavingExtras(linkedProfiles());
     setSaving({
       id: `research:${company.id}:${question.slice(0, 40)}`,
       type: "research",
@@ -438,10 +465,12 @@ export default function Research({
           record={saving}
           library={library}
           onCancel={() => setSaving(null)}
-          onConfirm={async (r) => {
-            const ok = await onSave(r);
+          extras={savingExtras}
+          onConfirm={async (r, extras) => {
+            const ok = await onSave(extras.length ? [r, ...extras] : r);
             setSaving(null);
-            setToast(ok ? `Saved ${r.type === "research" ? "this research" : r.name} to your library` : "Couldn't save");
+            setSavingExtras([]);
+            setToast(ok ? `Saved ${r.type === "research" ? "this research" : r.name}${extras.length ? ` and ${extras.length} profile${extras.length > 1 ? "s" : ""}` : ""} to your library` : "Couldn't save");
             setTimeout(() => setToast(null), 2400);
           }}
         />

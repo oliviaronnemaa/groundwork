@@ -484,3 +484,9 @@ table.fields td:first-child { width: 190px; color: var(--muted); }
 .ob-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
 @media (max-width: 640px) { .ob-grid, .ob-ways { grid-template-columns: 1fr; } .ob-path li { grid-template-columns: 28px 1fr; } .ob-call { display: none; } .ob-legend > div { grid-template-columns: 22px 1fr; } .ob-legend span { grid-column: 2; } }
 .ob > * { flex-shrink: 0; }
+
+.save-extras { display: flex; flex-direction: column; gap: 6px; margin: 12px 0 4px; padding: 12px 14px; background: var(--line-2); border-radius: 12px; }
+.save-list { display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow: auto; margin-top: 4px; }
+.save-item { display: flex; align-items: center; gap: 10px; padding: 6px 4px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.save-item:hover { background: #fff; }
+.save-item input { width: 16px; height: 16px; accent-color: var(--green); }

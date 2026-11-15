@@ -81,7 +81,7 @@ export default function App() {
     },
   };
 
-  const save = async (rec: LibraryRecord) => {
+  const save = async (rec: LibraryRecord | LibraryRecord[]) => {
     const res = await fetch("/api/library", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(rec) });
     if (res.ok) setLibrary(await res.json());
     return res.ok;
