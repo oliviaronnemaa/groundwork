@@ -6,9 +6,9 @@ You type who you're meeting. Groundwork looks them up in Cala and lays out what'
 
 ## Demo
 
-![Groundwork demo](docs/demo.gif)
+[![Groundwork demo: click to watch](docs/poster.png)](docs/demo.mp4)
 
-Video file: [docs/demo.mp4](docs/demo.mp4)
+**[Watch the 40-second demo (docs/demo.mp4)](docs/demo.mp4)**
 
 What you see: the first-run walkthrough, a research on Aiven, a founder's side panel with sources and a suggested question, the research path with the exact Cala request, the brief, and saving the research together with the company, people and investor profiles.
 
