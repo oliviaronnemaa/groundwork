@@ -1,4 +1,6 @@
 import "server-only";
+import { createHash } from "crypto";
+import { cacheGet, cacheSet, hasDb } from "./store";
 import { promises as fs } from "fs";
 import path from "path";
 import type { CallLog, CalaTool, Source } from "./types";
@@ -25,6 +27,18 @@ function persistCache() {
   }).catch(() => {});
 }
 const useCache = process.env.CALA_CACHE !== "off";
+const PREFIX = "cala:";
+async function getCached<T>(key: string): Promise<T | null> {
+  if (hasDb) return cacheGet<T>(PREFIX + createHash("sha1").update(key).digest("hex"), TTL).catch(() => null);
+  const c = (await loadCache())[key];
+  return c && Date.now() - c.at < TTL ? (c.data as T) : null;
+}
+async function putCached(key: string, data: unknown) {
+  if (hasDb) return void (await cacheSet(PREFIX + createHash("sha1").update(key).digest("hex"), data).catch(() => {}));
+  (await loadCache())[key] = { at: Date.now(), data };
+  persistCache();
+}
+
 
 // When Cala rate-limits us, every request waits until this time.
 let pausedUntil = 0;
@@ -91,11 +105,11 @@ export class Cala {
     return this.run(async () => {
       const key = `${method} ${path} ${body === undefined ? "" : JSON.stringify(body)}`;
       if (useCache) {
-        const c = (await loadCache())[key];
-        if (c && Date.now() - c.at < TTL) {
+        const hit = await getCached<T>(key);
+        if (hit) {
           this.count++;
-          this.emit({ ...log, status: "ok", ms: 0, cached: true, summary: safe(() => summarize(c.data as T)) });
-          return { data: c.data as T, callId: id };
+          this.emit({ ...log, status: "ok", ms: 0, cached: true, summary: safe(() => summarize(hit)) });
+          return { data: hit, callId: id };
         }
       }
       this.emit({ ...log, startedAt: Date.now() });
@@ -105,10 +119,7 @@ export class Cala {
           this.emit({ ...log, status: "running", summary: `Rate limited by Cala, retrying in ${Math.round(waitMs / 1000)}s` }),
         );
         this.count++;
-        if (useCache) {
-          (await loadCache())[key] = { at: Date.now(), data };
-          persistCache();
-        }
+        if (useCache) await putCached(key, data);
         this.emit({ ...log, status: "ok", ms: Date.now() - t0, summary: safe(() => summarize(data)) });
         return { data, callId: id };
       } catch (e) {

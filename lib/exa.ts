@@ -1,4 +1,6 @@
 import "server-only";
+import { createHash } from "crypto";
+import { cacheGet, cacheSet, hasDb } from "./store";
 import { promises as fs } from "fs";
 import path from "path";
 import type { CallLog } from "./types";
@@ -49,6 +51,18 @@ function persistCache() {
     .catch(() => {});
 }
 const useCache = process.env.CALA_CACHE !== "off";
+const PREFIX = "exa:";
+async function getCached<T>(key: string): Promise<T | null> {
+  if (hasDb) return cacheGet<T>(PREFIX + createHash("sha1").update(key).digest("hex"), TTL).catch(() => null);
+  const c = (await loadCache())[key];
+  return c && Date.now() - c.at < TTL ? (c.data as T) : null;
+}
+async function putCached(key: string, data: unknown) {
+  if (hasDb) return void (await cacheSet(PREFIX + createHash("sha1").update(key).digest("hex"), data).catch(() => {}));
+  (await loadCache())[key] = { at: Date.now(), data };
+  persistCache();
+}
+
 
 let seq = 0;
 let active = 0;
@@ -75,10 +89,9 @@ export class Exa {
     return slot(async () => {
       const key = JSON.stringify(body);
       if (useCache) {
-        const c = (await loadCache())[key];
-        if (c && Date.now() - c.at < TTL) {
+        const data = await getCached<{ results: ExaResult[] }>(key);
+        if (data) {
           this.count++;
-          const data = c.data as { results: ExaResult[] };
           this.emit({ ...log, status: "ok", ms: 0, cached: true, summary: summarize(data) });
           return { data, callId: id };
         }
@@ -88,10 +101,7 @@ export class Exa {
       try {
         const data = await this.post(body);
         this.count++;
-        if (useCache) {
-          (await loadCache())[key] = { at: Date.now(), data };
-          persistCache();
-        }
+        if (useCache) await putCached(key, data);
         this.emit({ ...log, status: "ok", ms: Date.now() - t0, summary: summarize(data) });
         return { data, callId: id };
       } catch (e) {

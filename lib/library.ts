@@ -1,22 +1,13 @@
 import "server-only";
-import { promises as fs } from "fs";
-import path from "path";
+import { readDoc, writeDoc } from "./store";
 import type { LibraryRecord } from "./types";
 
-const FILE = path.join(process.env.VERCEL ? "/tmp" : path.join(process.cwd(), "data"), "library.json");
-
 export async function readLibrary(): Promise<LibraryRecord[]> {
-  try {
-    return JSON.parse(await fs.readFile(FILE, "utf8"));
-  } catch {
-    return [];
-  }
+  return readDoc<LibraryRecord[]>("library", []);
 }
 
 async function write(list: LibraryRecord[]) {
-  await fs.mkdir(path.dirname(FILE), { recursive: true });
-  await fs.writeFile(FILE + ".tmp", JSON.stringify(list, null, 2));
-  await fs.rename(FILE + ".tmp", FILE);
+  await writeDoc("library", list);
 }
 
 export async function upsertRecord(rec: LibraryRecord) {
