@@ -63,6 +63,7 @@ export function deskModel(run: DeskRun) {
     status,
     stage: titleCase(get("funding_stage")),
     description: get("description"),
+    webCount: cev.filter((e) => e.field === "web").length,
     hq: get("headquarters_address"),
     city: cityOf(get("headquarters_address")),
     founded: get("founding_date"),
@@ -136,7 +137,8 @@ export default function Desk({
   const steps = run.steps;
   const doneCount = steps.filter((s) => s.status === "done" || s.status === "skipped").length;
   const running = steps.find((s) => s.status === "running");
-  const lookups = run.calls.filter((c) => c.status === "ok").length;
+  const lookups = run.calls.filter((c) => c.status === "ok" && c.provider !== "exa").length;
+  const webSearches = run.calls.filter((c) => c.status === "ok" && c.provider === "exa").length;
 
   return (
     <div className="deskwrap" ref={wrapRef}>
@@ -196,14 +198,18 @@ export default function Desk({
               const more = i === 1 ? m.people.length - 2 : 0;
               const c = avatarColors(p.name);
               const hasNote = notes.some((n) => n.links.some((l) => l.id === p.id));
+              const webCount = run.evidence.filter((e) => e.entityId === p.id && e.field === "web").length;
               return (
                 <button key={p.id} className={`dcard ${isNode(p.id) ? "sel" : ""}`} onClick={() => onSelect({ type: "node", id: p.id })} style={{ left: pos.left, top: pos.top, width: pos.w, flexDirection: "row", alignItems: "center", gap: 12 }}>
                   <span className="av" style={c}>{initials(p.name)}</span>
                   <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
                     <span style={{ fontWeight: 600, fontSize: 15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
-                    <span className="csub" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{more > 0 ? `${shortRole(p.subtitle)} · +${more} more` : shortRole(p.subtitle)}</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                      <span className="csub" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{more > 0 ? `${shortRole(p.subtitle)} · +${more} more` : shortRole(p.subtitle)}</span>
+                      {webCount > 0 && <span className="mini"><Mark kind="web" title={`${webCount} web page${webCount > 1 ? "s" : ""} mention them: leads to check`} /></span>}
+                      {hasNote && <span className="mini"><Mark kind="note" title="You have notes about this person" /></span>}
+                    </span>
                   </span>
-                  {hasNote && <Mark kind="note" title="You have notes about this person" />}
                 </button>
               );
             })
@@ -226,7 +232,8 @@ export default function Desk({
               extra={m.investors.length ? <span className="avs">{m.investors.slice(0, 3).map((x) => <span key={x.id} className="av" style={avatarColors(x.name)}>{initials(x.name)}</span>)}{m.investors.length > 3 && <span className="av" style={{ background: "var(--line-2)", color: "var(--muted)" }}>+{m.investors.length - 3}</span>}</span> : undefined}
               looking="Tracing funding…" />
             <Cluster pos={P.product} state={phase("profile", !!m.description)} sel={isSel("product")} onClick={open("product")} icon="box" tint="var(--purple-soft)" ink="var(--purple-ink)" title="Product"
-              line={clip(firstSentence(m.description ?? ""), 70) || "No product description"} sub={m.industry} looking="Reading the profile…" />
+              line={clip(firstSentence(m.description ?? ""), 70) || "No product description"}
+              sub={m.industry ?? (m.webCount ? `${m.webCount} web page${m.webCount > 1 ? "s" : ""} mention it` : undefined)} looking="Reading the profile…" />
             <Cluster pos={P.help} state={phase("network", m.helpers.length > 0)} sel={isSel("help")} onClick={open("help")} icon="team" tint="var(--teal-soft)" ink="var(--teal-ink)" title="Could help"
               line={m.helpers.length ? `${m.helpers.length} people to talk to` : "No one found via sourced links"}
               extra={m.helpers.length ? <span className="avs">{m.helpers.slice(0, 3).map((h) => <span key={h.id} className="av" style={avatarColors(h.name)}>{initials(h.name)}</span>)}</span> : undefined}
@@ -270,7 +277,7 @@ export default function Desk({
         </span>
         <span style={{ display: "flex", flexDirection: "column" }}>
           <span className="nu" style={{ fontWeight: 800, fontSize: 14 }}>{run.fatal ? "Research stopped" : run.done ? "Desk is ready" : running ? running.label : steps.length ? `${doneCount} of ${steps.length}` : "Starting…"}</span>
-          <span className="csub">{lookups} Cala lookup{lookups === 1 ? "" : "s"} · see the path</span>
+          <span className="csub">{lookups} Cala lookup{lookups === 1 ? "" : "s"}{webSearches ? ` · ${webSearches} web search${webSearches === 1 ? "" : "es"}` : ""} · see the path</span>
         </span>
       </button>
       <div className="legend"><Legend /></div>

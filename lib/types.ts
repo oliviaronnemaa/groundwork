@@ -7,13 +7,15 @@ export type Source = {
   url?: string;
   date?: string;
   rank?: SourceRank;
+  web?: boolean; // found by an open-web search (Exa), not Cala: a lead, not a verified record
 };
 
 export type CalaTool =
   | "entity_search"
   | "entity_introspection"
   | "entity_retrieval"
-  | "knowledge_search";
+  | "knowledge_search"
+  | "web_search"; // Exa open-web search
 
 export type CallLog = {
   id: string;
@@ -27,6 +29,7 @@ export type CallLog = {
   summary?: string;
   error?: string;
   startedAt: number;
+  provider?: "cala" | "exa"; // default cala
   cached?: boolean; // served from Groundwork's local cache of an earlier Cala response
 };
 

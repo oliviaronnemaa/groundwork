@@ -26,7 +26,7 @@ export async function POST(req: Request) {
         }
       };
       try {
-        if (founders.length) await runFounders({ key, founders, idea: String(body.idea ?? "").slice(0, 400), name: String(body.name ?? "").slice(0, 80), emit });
+        if (founders.length) await runFounders({ key, exaKey: process.env.EXA_API_KEY || undefined, founders, idea: String(body.idea ?? "").slice(0, 400), name: String(body.name ?? "").slice(0, 80), emit });
         else await runResearch({ key, companyId: companyId!, question: question ?? "", emit });
       } catch (e) {
         emit({ type: "fatal", message: e instanceof Error ? e.message : String(e) });

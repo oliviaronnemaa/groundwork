@@ -30,7 +30,7 @@ export function Sources({ sources }: { sources: Source[] }) {
         const label = s.name || host(s.url) || "source";
         const inner = (
           <>
-            {s.rank && <span className="rank">{s.rank}</span>}
+            {s.rank && <span className={`rank${s.web ? " web" : ""}`}>{s.rank}</span>}
             {label}
             {s.date ? ` · ${s.date}` : ""}
           </>
@@ -177,11 +177,12 @@ export function Icon({ name, size = 16, color = "currentColor", stroke = 2 }: { 
 }
 
 /** Where a fact came from, as a small mark instead of a text badge. */
-export function Mark({ kind, title }: { kind: "pub" | "note" | "unk" | "ai"; title?: string }) {
-  const t = title ?? { pub: "Public data from Cala", note: "Your note", unk: "Unknown", ai: "Interpretation" }[kind];
+export function Mark({ kind, title }: { kind: "pub" | "note" | "unk" | "ai" | "web"; title?: string }) {
+  const t = title ?? { pub: "Public data from Cala", note: "Your note", unk: "Unknown", ai: "Interpretation", web: "Found on the open web: a lead to check, not a verified record" }[kind];
   return (
     <span className={`mark ${kind}`} title={t} aria-label={t} role="img">
       {kind === "pub" && <Icon name="globe" size={11} stroke={2.6} />}
+      {kind === "web" && <Icon name="search" size={10} stroke={2.8} />}
       {kind === "note" && <Icon name="pencil" size={10} stroke={2.8} />}
       {kind === "unk" && "?"}
       {kind === "ai" && <Icon name="chevron" size={10} stroke={2.6} />}
@@ -193,6 +194,7 @@ export function Legend() {
   return (
     <>
       <span><Mark kind="pub" /> Public data</span>
+      <span><Mark kind="web" /> Web lead</span>
       <span><Mark kind="note" /> Your notes</span>
       <span><Mark kind="unk" /> Unknown</span>
     </>

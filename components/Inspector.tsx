@@ -63,13 +63,20 @@ export default function Inspector({
         <div key={e.id} className={`fact ${hl?.has(e.id) ? "hl" : ""}`}>
           <div className="fl">
             <span>{e.label}</span>
-            <button className="chip" onClick={() => onSelect({ type: "call", id: e.callId })} title="Show the Cala lookup that returned this">{e.id}</button>
+            <button className="chip" onClick={() => onSelect({ type: "call", id: e.callId })} title="Show the lookup that returned this">{e.id}</button>
           </div>
           <div className="fv">{e.value}</div>
           <Sources sources={e.sources} />
         </div>
       ))}
     </div>
+  );
+  const webSection = (list: Evidence[], who: string) => (
+    <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}><Mark kind="web" /> Found on the web</h3>
+      <div className="webnote">These pages mention {who} by name. They come from an open-web search, not Cala, so check they're about the right {who.includes(" ") ? "person" : "company"} before relying on them.</div>
+      {factList(list)}
+    </section>
   );
   const notesAbout = (id: string, name: string) =>
     notes.filter((x) => x.links.some((l) => l.id === id || (l.kind === "tag" && norm(l.name) === norm(name))));
@@ -194,6 +201,7 @@ export default function Inspector({
         body = (
           <>
             {d ? factList([d]) : <div className="unknown"><Mark kind="unk" /> No product description in Cala.</div>}
+            {m.cev.some((e) => e.field === "web") && webSection(m.cev.filter((e) => e.field === "web"), cname)}
             {m.industry && <div className="prop"><span className="k">Industry</span><span>{m.industry}</span></div>}
             <div className="unknown"><Mark kind="unk" /> Pricing and usage aren't in public data. Ask the founders.</div>
           </>
@@ -299,7 +307,8 @@ export default function Inspector({
     const ev = run.evidence.filter((e) => e.entityId === sel.id);
     const isPerson = n?.kind === "person" || (n?.kind === "investor" && n.entityType === "Person");
     const work = ev.filter((e) => WORK.test(e.field) || e.field === "role");
-    const other = ev.filter((e) => !work.includes(e));
+    const webEv = ev.filter((e) => e.field === "web");
+    const other = ev.filter((e) => !work.includes(e) && !webEv.includes(e));
     const links = run.edges.filter((e) => e.from === sel.id || e.to === sel.id);
     const helper = run.helpers.find((h) => h.personId === sel.id);
     const saved = library.some((r) => r.id === sel.id);
@@ -349,7 +358,9 @@ export default function Inspector({
             <div style={{ marginTop: 10 }}>{factList(other)}</div>
           </details>
         )}
-        {!ev.length && <div className="unknown"><Mark kind="unk" /> Cala returned this as a link only; its own profile wasn't looked up.</div>}
+        {webEv.length > 0 && webSection(webEv, name)}
+        {sel.id.startsWith("web:") && !webEv.length && <div className="unknown"><Mark kind="unk" /> Not in Cala, and nothing on the web clearly about them. Ask about their background, or add what you know as a note.</div>}
+        {!ev.length && !sel.id.startsWith("web:") && <div className="unknown"><Mark kind="unk" /> Cala returned this as a link only; its own profile wasn't looked up.</div>}
         {isPerson && firstWork && (
           <div className="keyq">
             <span className="qmark" style={{ width: 38, height: 38 }}>?</span>
@@ -386,14 +397,14 @@ export default function Inspector({
     const ev = run.evidence.filter((e) => e.callId === sel.id);
     head = (
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <span className="pill blue" style={{ alignSelf: "flex-start" }}>Cala lookup · {c?.cached ? "cached" : c?.ms != null ? `${c.ms} ms` : c?.status}</span>
+        <span className={`pill ${c?.provider === "exa" ? "web" : "blue"}`} style={{ alignSelf: "flex-start" }}>{c?.provider === "exa" ? "Exa web search" : "Cala lookup"} · {c?.cached ? "cached" : c?.ms != null ? `${c.ms} ms` : c?.status}</span>
         <h2 style={{ fontSize: 24 }}>{c?.tool}</h2>
       </div>
     );
     body = c && (
       <>
         <dl className="kv">
-          <dt>Endpoint</dt><dd>{c.method} api.cala.ai{c.path.split("?")[0]}</dd>
+          <dt>Endpoint</dt><dd>{c.method} {c.provider === "exa" ? "api.exa.ai" : "api.cala.ai"}{c.path.split("?")[0]}</dd>
           {c.path.includes("?") && (<><dt>Query</dt><dd>{decodeURIComponent(c.path.split("?")[1]).replace(/&/g, " · ")}</dd></>)}
           <dt>Result</dt><dd>{c.status === "error" ? <span style={{ color: "var(--err)" }}>{c.error}</span> : c.summary}</dd>
         </dl>

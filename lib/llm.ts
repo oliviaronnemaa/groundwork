@@ -104,6 +104,7 @@ Hard rules:
 - Use only the evidence (E…), investor notes (N…), gaps and helpers provided. Never add facts from memory, even well-known ones.
 - Every "fact" claim must cite at least one E id that directly supports it. A claim drawn from investor notes is kind "note" and cites N ids. Anything inferred, compared or speculative is kind "interpretation", phrased as a hypothesis ("may", "worth checking whether").
 - Missing data is not proof of absence: say "Cala has no record of…", not "they have no…".
+- Evidence whose source is marked WEB comes from an open-web search, not Cala. It may be about someone else with the same name. Treat it as a lead: attribute it ("a page on example.com says…"), never state it as established, and if it matters, add a founder question to confirm it.
 - No investment verdicts, success predictions, scores or recommendations to invest or pass.
 - Never judge a founder's intelligence, personality, ambition or potential from a biography. Describe observable experience only.
 - Comparable cases: pick from the comparable or portfolio companies in the evidence only, explain the shared mechanism and where the analogy breaks. Possible contributors to outcomes are hypotheses.
@@ -134,7 +135,7 @@ ${input.context.filter((c) => c.a.trim()).map((c) => `- ${c.q} → ${c.a}`).join
 Investor notes (private, never sent to Cala):
 ${input.notes.map((n) => `${n.id} [${n.kind ?? "observation"}${n.links?.length ? `, about ${n.links.map((l) => l.name).join(", ")}` : ""}]: ${n.text}`).join("\n") || "(none)"}
 
-Evidence from Cala:
+Evidence (from Cala, plus any WEB-marked pages from an open-web search):
 ${evidenceText}
 
 Gaps detected:
@@ -199,7 +200,8 @@ function validate(b: z.infer<typeof BriefSchema>, input: { evidence: Evidence[];
 function rulesBrief(input: { evidence: Evidence[]; gaps: Gap[]; helpers: Helper[]; notes: Note[]; companyId: string; companyName: string }): Brief {
   const ev = input.evidence;
   const fact = (e: Evidence): Claim => ({ text: `${e.entityId === input.companyId ? e.label : `${e.entityName} — ${e.label.toLowerCase()}`}: ${e.value}`, kind: "fact", evidence: [e.id], notes: [] });
-  const company = ev.filter((e) => e.entityId === input.companyId && !["funding_round", "corporate_event"].includes(e.field));
+  const company = ev.filter((e) => e.entityId === input.companyId && !["funding_round", "corporate_event", "web"].includes(e.field));
+  const web = ev.filter((e) => e.field === "web");
   const team = ev.filter((e) => e.field === "role" || (["description", "FOUNDED", "WORKS_AT", "IS_CEO_OF", "IS_CTO_OF", "IS_BOARD_MEMBER_OF"].includes(e.field) && e.entityId !== input.companyId && !e.field.startsWith("portfolio")));
   const funding = ev.filter((e) => ["funding_round", "participants", "investor_in_target"].includes(e.field));
   const network = ev.filter((e) => ["portfolio", "shared_investors"].includes(e.field));
@@ -208,6 +210,7 @@ function rulesBrief(input: { evidence: Evidence[]; gaps: Gap[]; helpers: Helper[
     { title: "Team", claims: team.slice(0, 12).map(fact) },
     { title: "Funding & investors", claims: funding.map(fact) },
     { title: "Investor network", claims: network.slice(0, 8).map(fact) },
+    { title: "On the web (leads to check)", claims: web.slice(0, 8).map((e) => ({ ...fact(e), text: `${e.entityName}: ${e.value}` })) },
     { title: "Your notes", claims: input.notes.map((n) => ({ text: n.text, kind: "note" as const, evidence: [], notes: [n.id] })) },
   ].filter((s) => s.claims.length);
   const compIds = new Set(ev.filter((e) => e.entityId !== input.companyId).map((e) => e.entityId));

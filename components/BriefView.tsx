@@ -52,6 +52,7 @@ export default function BriefView({
     const seen = new Set<string>();
     return brief.gaps.flatMap((g) => g.expertTypes).filter((x) => (seen.has(x.type) ? false : (seen.add(x.type), true))).slice(0, 2);
   }, [brief]);
+  const webCount = evidence.filter((e) => e.field === "web").length;
   const notesUsed = new Set(brief.sections.flatMap((s) => s.claims.flatMap((c) => c.notes))).size;
 
   const claimRow = (c: Claim, key: string) => {
@@ -63,7 +64,7 @@ export default function BriefView({
         <button className={`toggle ${isOpen ? "open" : ""} ${c.kind === "interpretation" ? "interp" : ""}`} onClick={() => toggle(key)} aria-expanded={isOpen}>
           <span className="tri"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M8 4v16l11-8z" /></svg></span>
           <span style={{ flex: 1, fontWeight: isOpen ? 600 : 500 }}>{c.text}</span>
-          <Mark kind={c.kind === "fact" ? "pub" : c.kind === "note" ? "note" : "ai"} />
+          <Mark kind={c.kind === "fact" ? (ev.length && ev.every((e) => e.sources.some((s) => s.web)) ? "web" : "pub") : c.kind === "note" ? "note" : "ai"} />
         </button>
         {isOpen && (
           <div className={`inside ${c.kind === "note" ? "note" : ""}`}>
@@ -99,7 +100,7 @@ export default function BriefView({
           <h1>Before you meet {companyName}</h1>
           <p style={{ margin: 0, fontSize: 17, lineHeight: 1.5, color: "var(--ink-2)" }}>{brief.headline}</p>
           <div className="props">
-            <div className="prop"><span className="k">Built from</span><span style={{ color: "var(--ink-2)" }}>{factCount} sourced facts from Cala{notes.length ? ` · ${notesUsed || notes.length} of your notes` : ""}</span></div>
+            <div className="prop"><span className="k">Built from</span><span style={{ color: "var(--ink-2)" }}>{factCount - webCount} sourced facts from Cala{webCount ? ` · ${webCount} web lead${webCount > 1 ? "s" : ""}` : ""}{notes.length ? ` · ${notesUsed || notes.length} of your notes` : ""}</span></div>
             <div className="prop"><span className="k">Written by</span><span style={{ color: "var(--ink-2)" }}>{brief.generatedBy === "claude" ? `Claude (${brief.model})` : "Groundwork, without AI synthesis"}</span></div>
           </div>
         </div>

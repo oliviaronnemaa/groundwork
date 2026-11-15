@@ -10,13 +10,19 @@ export default function SourcesView({ status, queries }: { status: Status; queri
       ok: !!status?.cala,
     },
     {
+      ico: "W", color: "var(--web)", name: "Open web (Exa)",
+      desc: "For founders and ideas too new for Cala: personal sites, launch posts and news that mention them by name. Shown as leads to check, never as verified records. Used in founders-first research only.",
+      state: status?.exa ? "Connected" : "Not configured: add EXA_API_KEY (Junction code EXA50JUNCTION)",
+      ok: !!status?.exa,
+    },
+    {
       ico: "N", color: "var(--note)", name: "Your notes",
       desc: "Notes and context you add during a research session. Kept in this app. Sent to Claude to write the brief, never sent to Cala.",
       state: "Provided per research", ok: true,
     },
     {
       ico: "A", color: "var(--ink)", name: "Claude (analysis)",
-      desc: "Turns retrieved evidence and your notes into a brief. Only sees what's on this page; every fact must cite Cala evidence.",
+      desc: "Turns retrieved evidence and your notes into a brief. Only sees what's on this page; every fact must cite evidence.",
       state: status?.claude ? `Connected · ${status.model}` : "Not configured: briefs list sourced facts only",
       ok: !!status?.claude,
     },

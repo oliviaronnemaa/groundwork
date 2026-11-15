@@ -7,7 +7,7 @@ import SourcesView from "./SourcesView";
 import NotesView, { QuickCapture } from "./NotesView";
 import { colorFor, Icon } from "./ui";
 
-export type Status = { cala: boolean; claude: boolean; model: string } | null;
+export type Status = { cala: boolean; exa?: boolean; claude: boolean; model: string } | null;
 
 export type NotesApi = {
   notes: Note[];

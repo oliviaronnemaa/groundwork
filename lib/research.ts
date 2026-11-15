@@ -1,4 +1,5 @@
 import "server-only";
+import { Exa, hostOf, type ExaResult } from "./exa";
 import { Cala, normSources, fmtDate, type Entity, type Introspection, type RelItem, type RetrieveBody } from "./cala";
 import type { Evidence, Gap, GraphEdge, GraphNode, Helper, NodeKind, ResearchEvent, Source, StepState, StepStatus } from "./types";
 
@@ -607,11 +608,12 @@ const F_STEPS: { id: string; label: string }[] = [
   { id: "funding", label: "Check for public funding" },
   { id: "people", label: "Explore their earlier work" },
   { id: "network", label: "Find people who worked with them" },
+  { id: "web", label: "Search the open web" },
   { id: "comparables", label: "Find comparable cases" },
   { id: "gaps", label: "Identify what's still unknown" },
 ];
 
-export async function runFounders(opts: { key: string; founders: string[]; idea: string; name: string; emit: (e: ResearchEvent) => void }) {
+export async function runFounders(opts: { key: string; exaKey?: string; founders: string[]; idea: string; name: string; emit: (e: ResearchEvent) => void }) {
   const { emit } = opts;
   const ctx: Ctx = { cala: new Cala(opts.key, (call) => emit({ type: "call", call })), emit, ev: [], nodes: new Map(), edges: new Set(), helpers: [] };
   for (const s of F_STEPS) emit({ type: "step", step: { ...s, status: "pending" } });
@@ -625,11 +627,18 @@ export async function runFounders(opts: { key: string; founders: string[]; idea:
   addNode(ctx, { id: cid, name, kind: "company", entityType: "Company", subtitle: "idea · not registered yet", callId: "" });
   if (opts.idea) addEv(ctx, cid, name, "description", "What they're building (your words)", opts.idea, yours, "");
   const found: { id: string; name: string }[] = [];
+  const unknown: { id: string; name: string }[] = [];
   for (const raw of opts.founders.slice(0, 4)) {
     try {
       const { data } = await ctx.cala.search("identify", raw, ["Person"], 5);
       const hit = (data.entities ?? []).find((e) => samePerson(e.name, raw));
       if (!hit) {
+        // Keep them on the desk anyway: the founder is real even if no database knows them yet.
+        const wid = `web:person:${slug(raw)}`;
+        unknown.push({ id: wid, name: raw });
+        addNode(ctx, { id: wid, name: raw, kind: "person", entityType: "Person", subtitle: "Founder · not in Cala", callId: "" });
+        addEdge(ctx, wid, cid, "founder", yours, "");
+        addEv(ctx, wid, raw, "role", `Role at ${name}`, "Founder", yours, "");
         emit({ type: "ask", ask: { id: `nf-${raw}`, text: `Cala has no record of ${raw} yet. If you know their background, add it as a note.` } });
         continue;
       }
@@ -711,7 +720,53 @@ export async function runFounders(opts: { key: string; founders: string[]; idea:
   );
   step("network", ctx.helpers.length ? "done" : "skipped", ctx.helpers.length ? `${ctx.helpers.length} people who worked at the same companies` : "No colleagues found in Cala");
 
-  // 4. Comparables -----------------------------------------------------------
+  // 4. Open web (Exa) --------------------------------------------------------
+  // Very new founders and ideas are often only on a personal site, a launch post or a news item.
+  // Everything found here is labelled "web": a lead to check, never a verified record.
+  const web = opts.exaKey ? new Exa(opts.exaKey, (call) => emit({ type: "call", call })) : null;
+  if (!web) {
+    step("web", "skipped", "Add an Exa API key to also search the open web");
+  } else {
+    step("web", "running");
+    const hasName = !!opts.name.trim();
+    let kept = 0;
+    const tasks: Promise<void>[] = [...found, ...unknown].map(async (p) => {
+      try {
+        const { data, callId } = await web.search("web", {
+          query: hasName ? `${p.name} ${name}` : `${p.name} founder${opts.idea ? ` ${opts.idea.slice(0, 80)}` : ""}`,
+          type: "auto",
+          numResults: 6,
+          contents: { highlights: { query: `What has ${p.name} worked on, built or founded?`, maxCharacters: 420 } },
+        });
+        const hits = data.results.filter((r) => mentionsPerson(r, p.name)).slice(0, 3);
+        for (const r of hits) kept += addWeb(ctx, p.id, p.name, r, callId) ? 1 : 0;
+      } catch {}
+    });
+    if (hasName) {
+      tasks.push(
+        (async () => {
+          try {
+            const { data, callId } = await web.search("web", {
+              query: `${name}${opts.idea ? `: ${opts.idea.slice(0, 160)}` : " startup"}`,
+              type: "auto",
+              numResults: 8,
+              contents: { highlights: { query: `What does ${name} do, who started it, and what stage is it at?`, maxCharacters: 420 } },
+            });
+            const own = slug(name).replace(/-/g, "");
+            const hits = data.results
+              .filter((r) => mentionsName(r, name))
+              .sort((a, b) => Number(hostOf(b.url).replace(/[^a-z0-9]/g, "").includes(own)) - Number(hostOf(a.url).replace(/[^a-z0-9]/g, "").includes(own)))
+              .slice(0, 4);
+            for (const r of hits) kept += addWeb(ctx, cid, name, r, callId, own) ? 1 : 0;
+          } catch {}
+        })(),
+      );
+    }
+    await Promise.all(tasks);
+    step("web", kept ? "done" : "skipped", kept ? `${kept} web page${kept === 1 ? "" : "s"} that mention them · leads to check` : "Nothing on the web clearly about them yet");
+  }
+
+  // 5. Comparables -----------------------------------------------------------
   step("comparables", "running");
   if (!opts.idea) {
     step("comparables", "skipped", "Describe what they're building to find comparable companies");
@@ -748,7 +803,7 @@ export async function runFounders(opts: { key: string; founders: string[]; idea:
     }
   }
 
-  // 5. Gaps ------------------------------------------------------------------
+  // 6. Gaps ------------------------------------------------------------------
   step("gaps", "running");
   const gaps: Gap[] = [];
   const g = (id: string, title: string, why: string) => gaps.push({ id: `G${gaps.length + 1}-${id}`, title, why });
@@ -757,8 +812,48 @@ export async function runFounders(opts: { key: string; founders: string[]; idea:
   g("raise", "The current raise", "No public funding yet. Ask about the round size, who else is in, and the terms.");
   g("company", "When they will incorporate", "There's no company record yet. Ask about the entity, ownership split and IP.");
   for (const x of gaps) emit({ type: "gap", gap: x });
-  step("gaps", "done", `${gaps.length} open questions · ${ctx.cala.count} Cala lookups`);
+  step("gaps", "done", `${gaps.length} open questions · ${ctx.cala.count} Cala lookups${web ? ` · ${web.count} web searches` : ""}`);
   emit({ type: "done" });
+}
+
+function slug(s: string) {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function flat(s: string) {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function haystack(r: ExaResult) {
+  return flat([r.title ?? "", r.url, ...(r.highlights ?? [])].join(" "));
+}
+
+/** Both first and last name appear on the page, so it's at least plausibly the same person. */
+function mentionsPerson(r: ExaResult, name: string) {
+  const parts = flat(name).split(/\s+/).filter((x) => x.length > 1);
+  if (parts.length < 2) return false;
+  const h = haystack(r);
+  return h.includes(parts[0]) && h.includes(parts[parts.length - 1]);
+}
+
+function mentionsName(r: ExaResult, name: string) {
+  const n = flat(name).trim();
+  if (n.length < 3) return false;
+  const h = haystack(r);
+  return h.includes(n) || h.replace(/[^a-z0-9]/g, "").includes(n.replace(/[^a-z0-9]/g, ""));
+}
+
+/** Add one web page as evidence. Returns false if it had nothing usable. */
+function addWeb(ctx: Ctx, entityId: string, entityName: string, r: ExaResult, callId: string, ownSlug?: string) {
+  const text = (r.highlights ?? []).join(" … ").replace(/\s+/g, " ").trim() || (r.text ?? "").slice(0, 400).trim();
+  if (!text) return false;
+  const host = hostOf(r.url);
+  const own = !!ownSlug && host.replace(/[^a-z0-9]/g, "").includes(ownSlug);
+  const label = own ? "Their own website" : (r.title || host || "Web page").replace(/\s+/g, " ").slice(0, 90);
+  const value = text.length > 360 ? text.slice(0, 357).replace(/\s+\S*$/, "") + "…" : text;
+  const date = r.publishedDate ? r.publishedDate.slice(0, 10) : undefined;
+  addEv(ctx, entityId, entityName, "web", label, value, [{ name: host || "web page", url: r.url, date, rank: "WEB", web: true }], callId);
+  return true;
 }
 
 function samePerson(a: string, b: string) {
